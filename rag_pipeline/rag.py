@@ -59,3 +59,23 @@ def answer_question(question: str):
     response = llm(system_prompt + question)
 
     return response[0]["generated_text"], format_sources(docs)
+
+# --- API wiring (create pipeline once, reuse) ---
+from .embeddings import get_embedding_model
+from .vector_store import FaissVectorStore
+from .retriever import SimpleRetriever
+
+_PIPELINE: RAGPipeline | None = None
+
+def get_pipeline() -> RAGPipeline:
+    global _PIPELINE
+    if _PIPELINE is None:
+        emb = get_embedding_model()
+        vs = FaissVectorStore.load_local(embedding=emb)  # loads from vector_store/faiss_index
+        retriever = SimpleRetriever(vector_store=vs)
+        _PIPELINE = RAGPipeline(retriever=retriever, llm=dummy_llm)  # swap llm later if needed
+    return _PIPELINE
+
+def answer_question(question: str, k: int = 3) -> Dict[str, Any]:
+    return get_pipeline().ask(question, k=k)
+
